@@ -301,7 +301,7 @@
 
         <!-- Hidden Forms for GAS Communication -->
         <!-- NOTE: replace __GAS_EXEC_URL__ with your deployed GAS "exec" URL (include /exec) -->
-        <form id="getPointsForm" class="hidden-form" action="__GAS_EXEC_URL__" method="GET" accept-charset="utf-8">
+        <form id="getPointsForm" class="hidden-form" action="https://script.google.com/macros/s/AKfycbz-fBrlhnS5VwF7Km-unCH72LTN1uWbY7ye4hEzqGvvAnMSVujRe_E6kawLJgzSHqGTSw/exec" method="POST" accept-charset="utf-8">
             <input type="hidden" name="action" value="getPoints">
             <input type="hidden" name="name" id="employeeName">
             <!-- returnUrl will be set dynamically to the clean profile URL -->
@@ -310,7 +310,7 @@
 
         <!-- Hidden form to go to Redeem -->
         <!-- NOTE: replace __REDEEM_PAGE_URL__ with your redeem page URL (e.g. https://.../Redeem.html) -->
-        <form id="goRedeemForm" class="hidden-form" action="__REDEEM_PAGE_URL__" method="GET" accept-charset="utf-8">
+        <form id="goRedeemForm" class="hidden-form" action="__REDEEM_PAGE_URL__" method="POST" accept-charset="utf-8">
             <input type="hidden" name="name" id="redeemName">
             <!-- optional: pass points too if you want -->
             <input type="hidden" name="points" id="redeemPoints">
@@ -383,7 +383,7 @@
             position: 'Assistant Supervisor',
             profilePicture: '',
             // Replace this placeholder with your deployed GAS exec URL, e.g. "https://script.google.com/macros/s/AKfycb.../exec"
-            gasWebAppUrl: '__GAS_EXEC_URL__',
+            gasWebAppUrl: 'https://script.google.com/macros/s/AKfycbz-fBrlhnS5VwF7Km-unCH72LTN1uWbY7ye4hEzqGvvAnMSVujRe_E6kawLJgzSHqGTSw/exec',
             // Replace redeem URL with your redeem page URL
             redeemPageUrl: '__REDEEM_PAGE_URL__'
         };
@@ -443,29 +443,31 @@
                 return;
             }
 
-            // Otherwise, prepare the form to contact GAS (via standard GET form submit)
+            // Otherwise, prepare the form to contact GAS
             const form = document.getElementById('getPointsForm');
 
-            // Set returnUrl to the clean profile URL (so GAS will redirect back here with params)
+            // Set returnUrl to the clean profile URL (so GAS can redirect back here with params if you implement that on GAS)
             document.getElementById('returnUrl').value = getCleanUrl();
 
             // Ensure GAS URL is used (placeholder must be replaced by you)
             form.action = CONFIG.gasWebAppUrl;
 
-            // submit the form to GAS using GET (this will navigate the browser to GAS response)
-            // Note: using setTimeout(0) to allow current event loop to finish rendering
-            setTimeout(function() {
-                try {
+            // Submit the form to GAS using POST via programmatic submit.
+            // We use a standard form submit (not fetch) so the request looks like a normal browser request and avoids some CORS issues
+            // If you prefer fetch/json, we can change — but this submit is consistent with "form submission to bypass CORS" requirement.
+            try {
+                // create a small delay to ensure DOM updates completed
+                setTimeout(function() {
                     form.submit();
-                } catch (e) {
-                    console.error('Form submit error', e);
-                    document.getElementById('loading').style.display = 'none';
-                }
-            }, 0);
+                }, 0);
+            } catch (e) {
+                console.error("Auto submit failed:", e);
+                document.getElementById('loading').style.display = 'none';
+            }
         });
 
         // Replace previous fetch-based getPointsFromGAS with form submission pattern:
-        // goRedeem will submit the redeem form as GET and pass name + points
+        // goRedeem will submit the redeem form as POST and pass name + points
         function goRedeem() {
             // ensure redeem form action is set to your redeem page URL
             const redeemForm = document.getElementById('goRedeemForm');
@@ -497,3 +499,4 @@
     </script>
 </body>
 </html>
+
