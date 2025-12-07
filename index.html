@@ -300,14 +300,20 @@
     <div class="container">
 
         <!-- Hidden Forms for GAS Communication -->
-        <form id="getPointsForm" class="hidden-form" action="https://script.google.com/macros/s/AKfycbwGaWYTlwQ224mXYUgrCcQWCxPgW_8sobbXobqGjD4AfAKZqRUTkNGSGQlH5PAcs4yZbA/exec" method="POST">
+        <!-- NOTE: replace __GAS_EXEC_URL__ with your deployed GAS "exec" URL (include /exec) -->
+        <form id="getPointsForm" class="hidden-form" action="__GAS_EXEC_URL__" method="GET" accept-charset="utf-8">
             <input type="hidden" name="action" value="getPoints">
             <input type="hidden" name="name" id="employeeName">
+            <!-- returnUrl will be set dynamically to the clean profile URL -->
+            <input type="hidden" name="returnUrl" id="returnUrl">
         </form>
 
         <!-- Hidden form to go to Redeem -->
-        <form id="goRedeemForm" class="hidden-form" action="https://hl-steel-industries-sdn-bhd.github.io/Redeem-html-test5/" method="POST">
+        <!-- NOTE: replace __REDEEM_PAGE_URL__ with your redeem page URL (e.g. https://.../Redeem.html) -->
+        <form id="goRedeemForm" class="hidden-form" action="__REDEEM_PAGE_URL__" method="GET" accept-charset="utf-8">
             <input type="hidden" name="name" id="redeemName">
+            <!-- optional: pass points too if you want -->
+            <input type="hidden" name="points" id="redeemPoints">
         </form>
 
         <div class="grid">
@@ -355,16 +361,16 @@
 
             <!-- Buttons Section -->
             <div class="buttons-container">
-                <button class="button" onclick="viewRanking()">View Ranking</button>
+                <button class="button" onclick="viewRanking()" type="button">View Ranking</button>
 
-                <button class="button" onclick="goRedeem()">Redeem Reward</button>
+                <button class="button" onclick="goRedeem()" type="button">Redeem Reward</button>
 
-                <button class="button" onclick="window.open('https://hl-steel-industries-sdn-bhd.github.io/Off-Site-Work-Record/', '_blank')">Off-site Work Record</button>
-                <button class="button" onclick="submitContribution()">Submit Contribution</button>
-                <button class="button" onclick="viewSchedule()">Work Schedule</button>
-                <button class="button" onclick="submitQC()">Submit QC Report</button>
-                <button class="button" onclick="viewBounty()">Bounty Task</button>
-                <button class="button" onclick="editProfile()">Edit Profile</button>
+                <button class="button" onclick="window.open('https://hl-steel-industries-sdn-bhd.github.io/Off-Site-Work-Record/', '_blank')" type="button">Off-site Work Record</button>
+                <button class="button" onclick="submitContribution()" type="button">Submit Contribution</button>
+                <button class="button" onclick="viewSchedule()" type="button">Work Schedule</button>
+                <button class="button" onclick="submitQC()" type="button">Submit QC Report</button>
+                <button class="button" onclick="viewBounty()" type="button">Bounty Task</button>
+                <button class="button" onclick="editProfile()" type="button">Edit Profile</button>
             </div>
 
         </div>
@@ -376,43 +382,104 @@
             department: 'Production',
             position: 'Assistant Supervisor',
             profilePicture: '',
-            gasWebAppUrl: 'https://script.google.com/macros/s/AKfycbwGaWYTlwQ224mXYUgrCcQWCxPgW_8sobbXobqGjD4AfAKZqRUTkNGSGQlH5PAcs4yZbA/exec'
+            // Replace this placeholder with your deployed GAS exec URL, e.g. "https://script.google.com/macros/s/AKfycb.../exec"
+            gasWebAppUrl: '__GAS_EXEC_URL__',
+            // Replace redeem URL with your redeem page URL
+            redeemPageUrl: '__REDEEM_PAGE_URL__'
         };
 
+        // Utility: get clean URL without query/hash
+        function getCleanUrl() {
+            return window.location.origin + window.location.pathname;
+        }
+
+        // Parse query params and if totalPoint/remainingPoint present, populate UI
+        function handleGASResponseFromQuery() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const totalPoint = urlParams.get('totalPoint');
+            const remainingPoint = urlParams.get('remainingPoint');
+
+            if (totalPoint !== null && remainingPoint !== null) {
+                // populate
+                const tp = Number(totalPoint) || 0;
+                const rp = Number(remainingPoint) || 0;
+                document.getElementById('totalPoint').textContent = tp.toLocaleString();
+                document.getElementById('remainingPoint').textContent = rp.toLocaleString();
+
+                // also set redeemPoints hidden so redeem form can pass it along if needed
+                document.getElementById('redeemPoints').value = rp;
+
+                // remove query params from URL (clean up)
+                try {
+                    window.history.replaceState({}, document.title, getCleanUrl());
+                } catch (e) {
+                    // ignore
+                }
+
+                // hide loading
+                const ld = document.getElementById('loading');
+                if (ld) ld.style.display = 'none';
+
+                return true;
+            }
+            return false;
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            // Fill static fields
             document.getElementById('employeeNameDisplay').textContent = CONFIG.employeeName;
             document.querySelector('.department').textContent = 'Department: ' + CONFIG.department;
             document.querySelector('.position').textContent = 'Position: ' + CONFIG.position;
             document.querySelector('.profile-pic').src = CONFIG.profilePicture;
 
-            // Fill forms
+            // Fill hidden inputs
             document.getElementById('employeeName').value = CONFIG.employeeName;
             document.getElementById('redeemName').value = CONFIG.employeeName;
 
-            getPointsFromGAS();
+            // If page already contains totalPoint/remainingPoint (returned by GAS), populate and stop
+            const alreadyHandled = handleGASResponseFromQuery();
+            if (alreadyHandled) {
+                // done
+                return;
+            }
 
-            setTimeout(() => {
-                document.getElementById('loading').style.display = 'none';
-            }, 1000);
+            // Otherwise, prepare the form to contact GAS (via standard GET form submit)
+            const form = document.getElementById('getPointsForm');
+
+            // Set returnUrl to the clean profile URL (so GAS will redirect back here with params)
+            document.getElementById('returnUrl').value = getCleanUrl();
+
+            // Ensure GAS URL is used (placeholder must be replaced by you)
+            form.action = CONFIG.gasWebAppUrl;
+
+            // submit the form to GAS using GET (this will navigate the browser to GAS response)
+            // Note: using setTimeout(0) to allow current event loop to finish rendering
+            setTimeout(function() {
+                try {
+                    form.submit();
+                } catch (e) {
+                    console.error('Form submit error', e);
+                    document.getElementById('loading').style.display = 'none';
+                }
+            }, 0);
         });
 
-        function getPointsFromGAS() {
-            const form = document.getElementById('getPointsForm');
-            fetch(form.action, {
-                method: "POST",
-                body: new FormData(form)
-            })
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('totalPoint').textContent = Number(data.totalPoint).toLocaleString();
-                document.getElementById('remainingPoint').textContent = Number(data.remainingPoint).toLocaleString();
-            })
-            .catch(err => console.error(err));
-        }
-
-        // POST to redeem.html
+        // Replace previous fetch-based getPointsFromGAS with form submission pattern:
+        // goRedeem will submit the redeem form as GET and pass name + points
         function goRedeem() {
-            document.getElementById("goRedeemForm").submit();
+            // ensure redeem form action is set to your redeem page URL
+            const redeemForm = document.getElementById('goRedeemForm');
+            redeemForm.action = CONFIG.redeemPageUrl;
+
+            // set redeem name and points (points already kept updated when response arrives)
+            document.getElementById('redeemName').value = CONFIG.employeeName;
+            // redeemPoints is already filled from handleGASResponseFromQuery when GAS redirected back
+            // If redeemPoints empty, set from remainingPoint displayed
+            const rpText = document.getElementById('remainingPoint').textContent || '0';
+            const rpNumber = Number(rpText.replace(/,/g, '')) || 0;
+            document.getElementById('redeemPoints').value = rpNumber;
+
+            redeemForm.submit();
         }
 
         function viewRanking() { alert('View Ranking feature coming soon!'); }
